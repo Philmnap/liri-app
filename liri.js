@@ -1,151 +1,111 @@
-// Load exports from keys.js file which has Twitter auth keys
+require("dotenv").config();
+
 var keys = require("./keys.js");
-var twitterCredentials = keys.twitterKeys;
+var Spotify = require('node-spotify-api'); //Using the Spotify api and getting the key from keys.js
+var spotify = new Spotify(keys.spotify);
 
-// node liri.js [ command ] [ query - optional ]
-var command = process.argv[2];
-var query = process.argv[3];
+var moment = require('moment'); //Both required to use moment for node
+moment().format();
 
-// Functions for 3 main functions of the app
-// 	--> do-what-it-says requires the use of functions
-var myTweets = function () {
-    // Load twitter module from npm
-    var Twitter = require('twitter');
+var axios = require('axios'); //To get the information from the APIs for movie and concert-this
 
-    // From exports of keys.js file
-    var client = new Twitter({
-        consumer_key: twitterCredentials.consumer_key,
-        consumer_secret: twitterCredentials.consumer_secret,
-        access_token_key: twitterCredentials.access_token_key,
-        access_token_secret: twitterCredentials.access_token_secret
-    });
+var fs = require('fs'); //To read the random.txt file for the do-what-it-says function
 
-    // Twitter API parameters
-    var params = {
-        screen_name: 'GiantGreenLion',
-        count: 20
-    };
+var command = process.argv[2]; //For the switch statement
+var value = process.argv[3]; //To send the song/movie/concert to their respective functions
 
-    // GET request for last 20 tweets on my account's timeline
-    client.get('statuses/user_timeline', params, function (error, tweets, response) {
-        if (error) { // if there IS an error
-            console.log('Error occurred: ' + error);
-        } else { // if there is NO error
-            console.log("My 20 Most Recent Tweets");
-            console.log("");
+switch (command) {
+    case "concert-this":
+        concertThis(value);
+        break;
+    case "spotify-this-song":
+        spotifySong(value);
+        break;
+    case "movie-this":
+        movieThis(value);
+        break;
+    case "do-what-it-says":
+        doThis(value);
+        break;
+};
 
-            for (var i = 0; i < tweets.length; i++) {
-                console.log("( #" + (i + 1) + " )  " + tweets[i].text);
-                console.log("Created:  " + tweets[i].created_at);
-                console.log("");
+function concertThis(value) {
+    axios.get("https://rest.bandsintown.com/artists/" + value + "/events?app_id=codingbootcamp")
+        .then(function (response) {
+            for (var i = 0; i < response.data.length; i++) {
+
+                var datetime = response.data[i].datetime; //Saves datetime response into a variable
+                var dateArr = datetime.split('T'); //Attempting to split the date and time in the response
+
+                var concertResults =
+                    "--------------------------------------------------------------------" +
+                    "\nVenue Name: " + response.data[i].venue.name +
+                    "\nVenue Location: " + response.data[i].venue.city +
+                    "\nDate of the Event: " + moment(dateArr[0], "MM-DD-YYYY"); //dateArr[0] should be the date separated from the time
+                console.log(concertResults);
             }
-        }
-    });
+        })
+        .catch(function (error) {
+            console.log(error);
+        });
+
+
 }
 
-var spotifyThisSong = function (trackQuery) {
-    // Load Spotify npm package
-    var spotify = require('spotify');
-
-    // if no trackQuery is passed in, then we will be querying for this particular song
-    if (trackQuery === undefined) {
-        trackQuery = "the sign ace of base";
+function spotifySong(value) {
+    if (!value) {
+        value = "The Sign";
     }
+    spotify
+        .search({ type: 'track', query: value })
+        .then(function (response) {
+            for (var i = 0; i < 5; i++) {
+                var spotifyResults =
+                    "--------------------------------------------------------------------" +
+                    "\nArtist(s): " + response.tracks.items[i].artists[0].name +
+                    "\nSong Name: " + response.tracks.items[i].name +
+                    "\nAlbum Name: " + response.tracks.items[i].album.name +
+                    "\nPreview Link: " + response.tracks.items[i].preview_url;
 
-    // Spotify API request (if an object is returned, output the first search result's artist(s), song, preview link, and album)
-    spotify.search({ type: 'track', query: trackQuery }, function (error, data) {
-        if (error) { // if error
-            console.log('Error occurred: ' + error);
-        } else { // if no error
-            // For loop is for when a track has multiple artists
-            for (var i = 0; i < data.tracks.items[0].artists.length; i++) {
-                if (i === 0) {
-                    console.log("Artist(s):    " + data.tracks.items[0].artists[i].name);
-                } else {
-                    console.log("              " + data.tracks.items[0].artists[i].name);
-                }
+                console.log(spotifyResults);
             }
-            console.log("Song:         " + data.tracks.items[0].name);
-            console.log("Preview Link: " + data.tracks.items[0].preview_url);
-            console.log("Album:        " + data.tracks.items[0].album.name);
-        }
-
-
-    });
+        })
+        .catch(function (err) {
+            console.log(err);
+        });
 }
 
-var movieThis = function (movieQuery) {
-    // Load request npm module
-    var request = require("request");
-
-    // if query that is passed in is undefined, Mr. Nobody becomes the default
-    if (movieQuery === undefined) {
-        movieQuery = "mr nobody";
+function movieThis(value) {
+    if (!value) {
+        value = "mr nobody";
     }
+    axios.get("https://www.omdbapi.com/?t=" + value + "&y=&plot=short&apikey=trilogy")
+        .then(function (response) {
+            var movieResults =
+                "--------------------------------------------------------------------" +
+                "\nMovie Title: " + response.data.Title +
+                "\nYear of Release: " + response.data.Year +
+                "\nIMDB Rating: " + response.data.imdbRating +
+                "\nRotten Tomatoes Rating: " + response.data.Ratings[1].Value +
+                "\nCountry Produced: " + response.data.Country +
+                "\nLanguage: " + response.data.Language +
+                "\nPlot: " + response.data.Plot +
+                "\nActors/Actresses: " + response.data.Actors;
+            console.log(movieResults);
+        })
+        .catch(function (error) {
+            console.log(error);
+        });
 
-    // HTTP GET request
-    request("http://www.omdbapi.com/?t=" + movieQuery + "&y=&plot=short&r=json", function (error, response, body) {
-        if (!error && response.statusCode === 200) {
-            console.log("* Title of the movie:         " + JSON.parse(body).Title);
-            console.log("* Year the movie came out:    " + JSON.parse(body).Year);
-            console.log("* IMDB Rating of the movie:   " + JSON.parse(body).imdbRating);
-            console.log("* Country produced:           " + JSON.parse(body).Country);
-            console.log("* Language of the movie:      " + JSON.parse(body).Language);
-            console.log("* Plot of the movie:          " + JSON.parse(body).Plot);
-            console.log("* Actors in the movie:        " + JSON.parse(body).Actors);
-
-            // For loop parses through Ratings object to see if there is a RT rating
-            // 	--> and if there is, it will print it
-            for (var i = 0; i < JSON.parse(body).Ratings.length; i++) {
-                if (JSON.parse(body).Ratings[i].Source === "Rotten Tomatoes") {
-                    console.log("* Rotten Tomatoes Rating:     " + JSON.parse(body).Ratings[i].Value);
-                    if (JSON.parse(body).Ratings[i].Website !== undefined) {
-                        console.log("* Rotten Tomatoes URL:        " + JSON.parse(body).Ratings[i].Website);
-                    }
-                }
-            }
-        }
-    });
 }
 
-// App functionality due to user input
-if (command === "my-tweets") {
-    myTweets();
-} else if (command === "spotify-this-song") {
-    spotifyThisSong(query);
-} else if (command === "movie-this") {
-    movieThis(query);
-} else if (command === "do-what-it-says") {
-    // App functionality from file read / loads fs npm package
-    var fs = require("fs");
+function doThis(value) {
 
-    fs.readFile("random.txt", "utf-8", function (error, data) {
-        var command;
-        var query;
-
-        // If there is a comma, then we will split the string from file in order to differentiate between the command and query
-        // 	--> if there is no comma, then only the command is considered (my-tweets)
-        if (data.indexOf(",") !== -1) {
-            var dataArr = data.split(",");
-            command = dataArr[0];
-            query = dataArr[1];
-        } else {
-            command = data;
+    fs.readFile("random.txt", "utf8", function (error, data) {
+        if (error) {
+            return console.log(error);
         }
-
-        // After reading the command from the file, decides which app function to run
-        if (command === "my-tweets") {
-            myTweets();
-        } else if (command === "spotify-this-song") {
-            spotifyThisSong(query);
-        } else if (command === "movie-this") {
-            movieThis(query);
-        } else { // Use case where the command is not recognized
-            console.log("Command from file is not a valid command! Please try again.")
-        }
-    });
-} else if (command === undefined) { // use case where no command is given
-    console.log("Please enter a command to run LIRI.")
-} else { // use case where command is given but not recognized
-    console.log("Command not recognized! Please try again.")
+        var dataArr = data.split(',');
+        spotifySong(dataArr[0], dataArr[1]);
+    })
 }
